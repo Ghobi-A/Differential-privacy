@@ -23,6 +23,7 @@ from typing import Dict, Tuple, Iterable
 
 import numpy as np
 import pandas as pd
+from defaults import EPSILON, DELTA, SENSITIVITY, TRUTH_P, K, get_rng
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
@@ -41,8 +42,8 @@ import tensorflow as tf
 
 def add_laplace_noise(
     data: pd.DataFrame,
-    epsilon: float = 0.1,
-    sensitivity: float = 1.0,
+    epsilon: float = EPSILON,
+    sensitivity: float = SENSITIVITY,
     random_state: int | None = None,
 ) -> pd.DataFrame:
     """Add Laplace noise to numeric columns.
@@ -57,16 +58,16 @@ def add_laplace_noise(
         Noised DataFrame.
     """
     delta = sensitivity / epsilon
-    rng = np.random.default_rng(random_state)
+    rng = get_rng(random_state)
     noise = rng.laplace(0, delta, data.shape)
     return data + noise
 
 
 def add_gaussian_noise(
     data: pd.DataFrame,
-    epsilon: float = 0.1,
-    delta: float = 1e-5,
-    sensitivity: float = 1.0,
+    epsilon: float = EPSILON,
+    delta: float = DELTA,
+    sensitivity: float = SENSITIVITY,
     random_state: int | None = None,
 ) -> pd.DataFrame:
     """Add Gaussian noise using the analytic Gaussian mechanism.
@@ -75,14 +76,14 @@ def add_gaussian_noise(
         random_state: Seed for the random number generator.
     """
     sigma = sensitivity * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
-    rng = np.random.default_rng(random_state)
+    rng = get_rng(random_state)
     noise = rng.normal(0, sigma, data.shape)
     return data + noise
 
 
 def add_exponential_noise(
     data: pd.DataFrame,
-    scale: float = 1.0,
+    scale: float = SENSITIVITY,
     random_state: int | None = None,
 ) -> pd.DataFrame:
     """Add exponential noise (Laplacian in L1 space).
@@ -90,14 +91,14 @@ def add_exponential_noise(
     Args:
         random_state: Seed for the random number generator.
     """
-    rng = np.random.default_rng(random_state)
+    rng = get_rng(random_state)
     noise = rng.exponential(scale, data.shape)
     return data + noise
 
 
 def add_geometric_noise(
     data: pd.DataFrame,
-    epsilon: float = 0.1,
+    epsilon: float = EPSILON,
     random_state: int | None = None,
 ) -> pd.DataFrame:
     """Add geometric noise for integer‑valued data.
@@ -106,14 +107,14 @@ def add_geometric_noise(
         random_state: Seed for the random number generator.
     """
     p = 1 - np.exp(-epsilon)
-    rng = np.random.default_rng(random_state)
+    rng = get_rng(random_state)
     noise = rng.geometric(p, size=data.shape) - 1
     return data + noise
 
 
 def randomised_response(
     series: pd.Series,
-    p: float = 0.7,
+    p: float = TRUTH_P,
     random_state: int | None = None,
 ) -> pd.Series:
     """Apply randomised response to a categorical variable.
@@ -125,7 +126,7 @@ def randomised_response(
         random_state: Seed for the random number generator.
     """
     values = series.unique()
-    rng = np.random.default_rng(random_state)
+    rng = get_rng(random_state)
     rand = rng.random(len(series))
     random_response = rng.choice(values, size=len(series))
     return pd.Series(np.where(rand < p, series, random_response), index=series.index)
@@ -135,7 +136,7 @@ def randomised_response(
 # Anonymisation
 # --------------------------------------------------------------------------------------
 
-def anonymise_dataset(df: pd.DataFrame, k: int = 5) -> pd.DataFrame:
+def anonymise_dataset(df: pd.DataFrame, k: int = K) -> pd.DataFrame:
     """Generalise quasi‑identifiers to satisfy approximate k‑anonymity."""
     anon = df.copy()
     # Age: bucket into reasonable groups and collapse small bins
