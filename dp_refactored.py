@@ -182,7 +182,14 @@ def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray, sensitive: Ite
     if hasattr(model, 'predict_proba'):
         preds = (model.predict_proba(X_test)[:, 1] >= 0.5).astype(int)
     else:
-        preds = (model.predict(X_test) >= 0.5).astype(int)
+        preds = model.predict(X_test)
+        preds = np.asarray(preds).ravel()
+        # Convert non-binary outputs (e.g., probabilities) to class labels
+        unique_vals = np.unique(preds)
+        if not set(unique_vals).issubset({0, 1}):
+            preds = (preds >= 0.5).astype(int)
+        else:
+            preds = preds.astype(int)
     accuracy = accuracy_score(y_test, preds)
     # Fairness: compute parity differences with respect to sensitive attribute indices
     dpd = demographic_parity_difference(y_test, preds, sensitive)
