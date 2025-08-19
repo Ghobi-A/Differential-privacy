@@ -1,0 +1,15 @@
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+scikit-learn
+imbalanced-learn
+tensorflow
+keras
+torch
+opacus
+fairlearn
+autodp
+tabulate
+ipython

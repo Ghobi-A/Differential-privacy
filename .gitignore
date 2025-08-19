@@ -1,0 +1,15 @@
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore Python cache directories
+__pycache__/
+
+# Ignore generated logs and temp files
+*.log
+*.tmp
+
+# Ignore the academic dissertation file
+MSc_Dissertation__Copy_*\(4\).pdf
+
+# Optionally ignore all PDFs (uncomment if needed)
+# *.pdf
