@@ -43,6 +43,12 @@ Alternatively, you can execute the notebook from the command line using `nbconve
 jupyter nbconvert --to notebook --execute --inplace differential_privacy.ipynb
 ```
 
+To run the refactored pipeline directly from the command line, use:
+
+```bash
+python dp_refactored.py --data insurance.csv --random-state 42
+```
+
 ## Continuous integration
 
 For convenience, this repository includes a GitHub Actions workflow that will run the notebook on every push and pull request.  It sets up a Python environment, installs the dependencies and executes `differential_privacy.ipynb` using `nbconvert`.  If the notebook runs successfully, the workflow will finish with a green check mark.  You can find the workflow definition in `.github/workflows/run‑notebook.yml`.

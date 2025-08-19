@@ -10,7 +10,7 @@ illustrate best practices for organising code in a project while keeping the
 scientific intent of the original work.
 
 Usage:
-    python dp_refactored.py --data insurance.csv
+    python dp_refactored.py --data insurance.csv --random-state 42
 
 Dependencies are listed in requirements.txt.
 """
@@ -33,56 +33,101 @@ from keras.models import Sequential
 from keras.layers import Dense
 from sklearn.metrics import accuracy_score
 from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
+import tensorflow as tf
 
 # --------------------------------------------------------------------------------------
 # Noise mechanisms
 # --------------------------------------------------------------------------------------
 
-def add_laplace_noise(data: pd.DataFrame, epsilon: float = 0.1, sensitivity: float = 1.0) -> pd.DataFrame:
+def add_laplace_noise(
+    data: pd.DataFrame,
+    epsilon: float = 0.1,
+    sensitivity: float = 1.0,
+    random_state: int | None = None,
+) -> pd.DataFrame:
     """Add Laplace noise to numeric columns.
 
     Args:
         data: DataFrame of numeric values.
         epsilon: Privacy budget; smaller values add more noise.
         sensitivity: Sensitivity of the query; defaults to 1.
+        random_state: Seed for the random number generator.
 
     Returns:
         Noised DataFrame.
     """
     delta = sensitivity / epsilon
-    noise = np.random.laplace(0, delta, data.shape)
+    rng = np.random.default_rng(random_state)
+    noise = rng.laplace(0, delta, data.shape)
     return data + noise
 
 
-def add_gaussian_noise(data: pd.DataFrame, epsilon: float = 0.1, delta: float = 1e-5, sensitivity: float = 1.0) -> pd.DataFrame:
-    """Add Gaussian noise using the analytic Gaussian mechanism."""
+def add_gaussian_noise(
+    data: pd.DataFrame,
+    epsilon: float = 0.1,
+    delta: float = 1e-5,
+    sensitivity: float = 1.0,
+    random_state: int | None = None,
+) -> pd.DataFrame:
+    """Add Gaussian noise using the analytic Gaussian mechanism.
+
+    Args:
+        random_state: Seed for the random number generator.
+    """
     sigma = sensitivity * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
-    noise = np.random.normal(0, sigma, data.shape)
+    rng = np.random.default_rng(random_state)
+    noise = rng.normal(0, sigma, data.shape)
     return data + noise
 
 
-def add_exponential_noise(data: pd.DataFrame, scale: float = 1.0) -> pd.DataFrame:
-    """Add exponential noise (Laplacian in L1 space)."""
-    noise = np.random.exponential(scale, data.shape)
+def add_exponential_noise(
+    data: pd.DataFrame,
+    scale: float = 1.0,
+    random_state: int | None = None,
+) -> pd.DataFrame:
+    """Add exponential noise (Laplacian in L1 space).
+
+    Args:
+        random_state: Seed for the random number generator.
+    """
+    rng = np.random.default_rng(random_state)
+    noise = rng.exponential(scale, data.shape)
     return data + noise
 
 
-def add_geometric_noise(data: pd.DataFrame, epsilon: float = 0.1) -> pd.DataFrame:
-    """Add geometric noise for integer‑valued data."""
+def add_geometric_noise(
+    data: pd.DataFrame,
+    epsilon: float = 0.1,
+    random_state: int | None = None,
+) -> pd.DataFrame:
+    """Add geometric noise for integer‑valued data.
+
+    Args:
+        random_state: Seed for the random number generator.
+    """
     p = 1 - np.exp(-epsilon)
-    noise = np.random.geometric(p, size=data.shape) - 1
+    rng = np.random.default_rng(random_state)
+    noise = rng.geometric(p, size=data.shape) - 1
     return data + noise
 
 
-def randomised_response(series: pd.Series, p: float = 0.7) -> pd.Series:
+def randomised_response(
+    series: pd.Series,
+    p: float = 0.7,
+    random_state: int | None = None,
+) -> pd.Series:
     """Apply randomised response to a categorical variable.
 
     Each value is reported truthfully with probability p; otherwise a random
     category is selected.
+
+    Args:
+        random_state: Seed for the random number generator.
     """
     values = series.unique()
-    rand = np.random.rand(len(series))
-    random_response = np.random.choice(values, size=len(series))
+    rng = np.random.default_rng(random_state)
+    rand = rng.random(len(series))
+    random_response = rng.choice(values, size=len(series))
     return pd.Series(np.where(rand < p, series, random_response), index=series.index)
 
 
@@ -141,29 +186,57 @@ class ModelResult:
     eod: float  # Equalised odds difference
 
 
-def train_svm(X: np.ndarray, y: np.ndarray) -> SVC:
-    """Train an SVM classifier with reasonable defaults and basic hyper‑parameter search."""
+def train_svm(
+    X: np.ndarray,
+    y: np.ndarray,
+    random_state: int | None = None,
+) -> SVC:
+    """Train an SVM classifier with reasonable defaults and basic hyper‑parameter search.
+
+    Args:
+        random_state: Seed for SMOTE and model initialisation.
+    """
     param_grid = {
         'C': [1, 5, 10],
         'kernel': ['linear', 'rbf'],
         'gamma': ['scale', 'auto']
     }
-    smote = SMOTE(random_state=42)
+    smote = SMOTE(random_state=random_state)
     X_res, y_res = smote.fit_resample(X, y)
-    grid = GridSearchCV(SVC(), param_grid, cv=3, scoring='accuracy', n_jobs=-1)
+    grid = GridSearchCV(SVC(random_state=random_state), param_grid, cv=3, scoring='accuracy', n_jobs=-1)
     grid.fit(X_res, y_res)
     return grid.best_estimator_
 
 
-def train_decision_tree(X: np.ndarray, y: np.ndarray) -> DecisionTreeClassifier:
-    tree = DecisionTreeClassifier(max_depth=5, random_state=42)
-    smote = SMOTE(random_state=42)
+def train_decision_tree(
+    X: np.ndarray,
+    y: np.ndarray,
+    random_state: int | None = None,
+) -> DecisionTreeClassifier:
+    """Train a decision tree classifier.
+
+    Args:
+        random_state: Seed for SMOTE and model initialisation.
+    """
+    tree = DecisionTreeClassifier(max_depth=5, random_state=random_state)
+    smote = SMOTE(random_state=random_state)
     X_res, y_res = smote.fit_resample(X, y)
     tree.fit(X_res, y_res)
     return tree
 
 
-def train_neural_network(X: np.ndarray, y: np.ndarray) -> Sequential:
+def train_neural_network(
+    X: np.ndarray,
+    y: np.ndarray,
+    random_state: int | None = None,
+) -> Sequential:
+    """Train a simple feed‑forward neural network.
+
+    Args:
+        random_state: Seed for SMOTE and weight initialisation.
+    """
+    if random_state is not None:
+        tf.random.set_seed(random_state)
     model = Sequential([
         Dense(32, activation='relu', input_shape=(X.shape[1],)),
         Dense(16, activation='relu'),
@@ -171,7 +244,7 @@ def train_neural_network(X: np.ndarray, y: np.ndarray) -> Sequential:
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     # For demonstration we keep epochs small; adjust as needed
-    smote = SMOTE(random_state=42)
+    smote = SMOTE(random_state=random_state)
     X_res, y_res = smote.fit_resample(X, y)
     model.fit(X_res, y_res, epochs=10, batch_size=32, verbose=0)
     return model
@@ -185,13 +258,17 @@ def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray, sensitive: Ite
         preds = (model.predict(X_test) >= 0.5).astype(int)
     accuracy = accuracy_score(y_test, preds)
     # Fairness: compute parity differences with respect to sensitive attribute indices
-    dpd = demographic_parity_difference(y_test, preds, sensitive)
-    eod = equalized_odds_difference(y_test, preds, sensitive)
+    dpd = demographic_parity_difference(y_test, preds, sensitive_features=sensitive)
+    eod = equalized_odds_difference(y_test, preds, sensitive_features=sensitive)
     return accuracy, dpd, eod
 
 
-def run_pipeline(df: pd.DataFrame) -> Dict[str, ModelResult]:
-    """Run noise mechanisms, train models and return metrics."""
+def run_pipeline(df: pd.DataFrame, random_state: int | None = 42) -> Dict[str, ModelResult]:
+    """Run noise mechanisms, train models and return metrics.
+
+    Args:
+        random_state: Seed controlling randomness throughout the pipeline.
+    """
     results = {}
     datasets: Dict[str, pd.DataFrame] = {
         'Original': df.copy(),
@@ -204,18 +281,30 @@ def run_pipeline(df: pd.DataFrame) -> Dict[str, ModelResult]:
     }
     # Apply noise
     numeric = df.select_dtypes(include=[np.number]).columns
-    datasets['Laplace'][numeric] = add_laplace_noise(datasets['Laplace'][numeric])
-    datasets['Gaussian'][numeric] = add_gaussian_noise(datasets['Gaussian'][numeric])
-    datasets['Exponential'][numeric] = add_exponential_noise(datasets['Exponential'][numeric])
-    datasets['Geometric'][numeric] = add_geometric_noise(datasets['Geometric'][numeric])
+    datasets['Laplace'][numeric] = add_laplace_noise(
+        datasets['Laplace'][numeric], random_state=random_state
+    )
+    datasets['Gaussian'][numeric] = add_gaussian_noise(
+        datasets['Gaussian'][numeric], random_state=random_state
+    )
+    datasets['Exponential'][numeric] = add_exponential_noise(
+        datasets['Exponential'][numeric], random_state=random_state
+    )
+    datasets['Geometric'][numeric] = add_geometric_noise(
+        datasets['Geometric'][numeric], random_state=random_state
+    )
     # Randomised response for categorical columns
     cat_cols = df.select_dtypes(include=['object']).columns
     for col in cat_cols:
-        datasets['RR'][col] = randomised_response(datasets['RR'][col])
+        datasets['RR'][col] = randomised_response(
+            datasets['RR'][col], random_state=random_state
+        )
     # Process each dataset
     for name, data in datasets.items():
         X, y, preproc = preprocess_data(data)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, stratify=y, random_state=random_state
+        )
         # Use sex column as sensitive feature for fairness evaluation
         # Determine sensitive feature index after preprocessing
         sensitive_col_index = None
@@ -229,23 +318,28 @@ def run_pipeline(df: pd.DataFrame) -> Dict[str, ModelResult]:
             sensitive_col_index = num_num + sex_indices[0]
         # Train models
         models = {
-            'SVM': train_svm(X_train, y_train),
-            'DecisionTree': train_decision_tree(X_train, y_train),
-            'NeuralNetwork': train_neural_network(X_train, y_train)
+            'SVM': train_svm(X_train, y_train, random_state=random_state),
+            'DecisionTree': train_decision_tree(X_train, y_train, random_state=random_state),
+            'NeuralNetwork': train_neural_network(X_train, y_train, random_state=random_state),
         }
         for mname, model in models.items():
-            acc, dpd, eod = evaluate_model(model, X_test, y_test, X_test[:, sensitive_col_index])
-            results[f'{name}_{mname}'] = ModelResult(name=f'{name}_{mname}', accuracy=acc, dpd=dpd, eod=eod)
+            acc, dpd, eod = evaluate_model(
+                model, X_test, y_test, X_test[:, sensitive_col_index]
+            )
+            results[f'{name}_{mname}'] = ModelResult(
+                name=f'{name}_{mname}', accuracy=acc, dpd=dpd, eod=eod
+            )
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(description='Run differential privacy ML pipeline.')
     parser.add_argument('--data', type=str, default='insurance.csv', help='Path to the insurance CSV dataset.')
+    parser.add_argument('--random-state', type=int, default=42, help='Random seed for reproducibility.')
     args = parser.parse_args()
     df = pd.read_csv(args.data)
     df.dropna(inplace=True)
-    res = run_pipeline(df)
+    res = run_pipeline(df, random_state=args.random_state)
     for key in sorted(res.keys()):
         r = res[key]
         print(f"{r.name}: acc={r.accuracy:.3f}, dpd={r.dpd:.3f}, eod={r.eod:.3f}")
