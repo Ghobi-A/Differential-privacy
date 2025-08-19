@@ -211,6 +211,8 @@ def run_pipeline(df: pd.DataFrame) -> Dict[str, ModelResult]:
     # Randomised response for categorical columns
     cat_cols = df.select_dtypes(include=['object']).columns
     for col in cat_cols:
+        if col == 'smoker':
+            continue
         datasets['RR'][col] = randomised_response(datasets['RR'][col])
     # Process each dataset
     for name, data in datasets.items():
