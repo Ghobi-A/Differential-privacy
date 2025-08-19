@@ -36,99 +36,165 @@ from fairlearn.metrics import demographic_parity_difference, equalized_odds_diff
 import tensorflow as tf
 
 # --------------------------------------------------------------------------------------
-# Noise mechanisms
+# Local differential privacy mechanisms
 # --------------------------------------------------------------------------------------
 
-def add_laplace_noise(
-    data: pd.DataFrame,
-    epsilon: float = 0.1,
+def laplace(
+    column: pd.Series | np.ndarray,
+    epsilon: float = 1.0,
     sensitivity: float = 1.0,
     random_state: int | None = None,
-) -> pd.DataFrame:
-    """Add Laplace noise to numeric columns.
+) -> pd.Series | np.ndarray:
+    """Apply Laplace mechanism to a numeric column.
 
     Args:
-        data: DataFrame of numeric values.
-        epsilon: Privacy budget; smaller values add more noise.
-        sensitivity: Sensitivity of the query; defaults to 1.
+        column: 1-D numeric data.
+        epsilon: Privacy budget controlling the scale of the noise.
+        sensitivity: Query sensitivity.
         random_state: Seed for the random number generator.
 
     Returns:
-        Noised DataFrame.
+        Noised column with the same type as the input.
     """
-    delta = sensitivity / epsilon
+    scale = sensitivity / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.laplace(0, delta, data.shape)
-    return data + noise
+    noise = rng.laplace(0.0, scale, size=len(column))
+    noised = column.to_numpy() if isinstance(column, pd.Series) else np.asarray(column)
+    noised = noised + noise
+    return pd.Series(noised, index=column.index) if isinstance(column, pd.Series) else noised
 
 
-def add_gaussian_noise(
-    data: pd.DataFrame,
-    epsilon: float = 0.1,
+def gaussian(
+    column: pd.Series | np.ndarray,
+    epsilon: float = 1.0,
     delta: float = 1e-5,
     sensitivity: float = 1.0,
     random_state: int | None = None,
-) -> pd.DataFrame:
-    """Add Gaussian noise using the analytic Gaussian mechanism.
-
-    Args:
-        random_state: Seed for the random number generator.
-    """
+) -> pd.Series | np.ndarray:
+    """Apply Gaussian mechanism to a numeric column."""
     sigma = sensitivity * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.normal(0, sigma, data.shape)
-    return data + noise
+    noise = rng.normal(0.0, sigma, size=len(column))
+    noised = column.to_numpy() if isinstance(column, pd.Series) else np.asarray(column)
+    noised = noised + noise
+    return pd.Series(noised, index=column.index) if isinstance(column, pd.Series) else noised
 
 
-def add_exponential_noise(
-    data: pd.DataFrame,
-    scale: float = 1.0,
+def exponential(
+    column: pd.Series | np.ndarray,
+    epsilon: float = 1.0,
+    sensitivity: float = 1.0,
     random_state: int | None = None,
-) -> pd.DataFrame:
-    """Add exponential noise (Laplacian in L1 space).
+) -> pd.Series | np.ndarray:
+    """Apply centred exponential noise to a numeric column."""
+    scale = sensitivity / epsilon
+    rng = np.random.default_rng(random_state)
+    noise = rng.exponential(scale, size=len(column)) - scale
+    noised = column.to_numpy() if isinstance(column, pd.Series) else np.asarray(column)
+    noised = noised + noise
+    return pd.Series(noised, index=column.index) if isinstance(column, pd.Series) else noised
+
+
+def geometric(
+    column: pd.Series | np.ndarray,
+    epsilon: float = 1.0,
+    sensitivity: float = 1.0,
+    random_state: int | None = None,
+) -> pd.Series | np.ndarray:
+    """Apply two‑sided geometric noise to integer data."""
+    p = 1 - np.exp(-epsilon / sensitivity)
+    rng = np.random.default_rng(random_state)
+    magnitudes = rng.geometric(p, size=len(column)) - 1
+    signs = rng.choice([-1, 1], size=len(column))
+    noise = signs * magnitudes
+    noised = column.to_numpy() if isinstance(column, pd.Series) else np.asarray(column)
+    noised = noised + noise
+    return pd.Series(noised, index=column.index) if isinstance(column, pd.Series) else noised
+
+
+def ldp_numeric(
+    column: pd.Series | np.ndarray,
+    mechanism: str = "laplace",
+    random_state: int | None = None,
+    **kwargs,
+) -> pd.Series | np.ndarray:
+    """Apply a numeric local DP mechanism.
 
     Args:
-        random_state: Seed for the random number generator.
+        column: Numeric data to perturb.
+        mechanism: One of ``'laplace'``, ``'gaussian'``, ``'exponential'`` or ``'geometric'``.
+        random_state: Seed for the RNG.
+        **kwargs: Additional parameters passed to the mechanism.
     """
-    rng = np.random.default_rng(random_state)
-    noise = rng.exponential(scale, data.shape)
-    return data + noise
-
-
-def add_geometric_noise(
-    data: pd.DataFrame,
-    epsilon: float = 0.1,
-    random_state: int | None = None,
-) -> pd.DataFrame:
-    """Add geometric noise for integer‑valued data.
-
-    Args:
-        random_state: Seed for the random number generator.
-    """
-    p = 1 - np.exp(-epsilon)
-    rng = np.random.default_rng(random_state)
-    noise = rng.geometric(p, size=data.shape) - 1
-    return data + noise
+    mech = mechanism.lower()
+    mechanisms = {
+        "laplace": laplace,
+        "gaussian": gaussian,
+        "exponential": exponential,
+        "geometric": geometric,
+    }
+    if mech not in mechanisms:
+        raise ValueError(f"Unknown mechanism '{mechanism}'")
+    return mechanisms[mech](column, random_state=random_state, **kwargs)
 
 
 def randomised_response(
     series: pd.Series,
-    p: float = 0.7,
+    truth_p: float = 0.7,
     random_state: int | None = None,
 ) -> pd.Series:
-    """Apply randomised response to a categorical variable.
+    """Randomised response for categorical data.
 
-    Each value is reported truthfully with probability p; otherwise a random
-    category is selected.
-
-    Args:
-        random_state: Seed for the random number generator.
+    Each value is reported truthfully with probability ``truth_p``; otherwise a
+    random category from the observed domain is returned.
     """
-    values = series.unique()
     rng = np.random.default_rng(random_state)
+    values = series.unique()
     rand = rng.random(len(series))
     random_response = rng.choice(values, size=len(series))
-    return pd.Series(np.where(rand < p, series, random_response), index=series.index)
+    result = np.where(rand < truth_p, series.to_numpy(), random_response)
+    return pd.Series(result, index=series.index)
+
+
+def apply_ldp(
+    df: pd.DataFrame,
+    numeric_cols: Iterable[str] | None = None,
+    categorical_cols: Iterable[str] | None = None,
+    numeric_mechanism: str = "laplace",
+    truth_p: float = 0.7,
+    random_state: int | None = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Apply local DP mechanisms to selected columns of ``df``.
+
+    Args:
+        df: DataFrame to perturb.
+        numeric_cols: Columns to apply numeric mechanism to.  If ``None``,
+            numeric columns are automatically selected.
+        categorical_cols: Columns to apply randomised response to.  If ``None``,
+            categorical columns are automatically selected.
+        numeric_mechanism: Mechanism name passed to :func:`ldp_numeric`.
+        truth_p: Probability of reporting the true value for categorical columns.
+        random_state: Seed for the RNG.
+        **kwargs: Additional parameters forwarded to the numeric mechanism.
+
+    Returns:
+        A new ``DataFrame`` with perturbed columns.
+    """
+    result = df.copy()
+    rng = np.random.default_rng(random_state)
+    if numeric_cols is None:
+        numeric_cols = result.select_dtypes(include=[np.number]).columns
+    if categorical_cols is None:
+        categorical_cols = result.select_dtypes(include=["object", "category"]).columns
+
+    for col in numeric_cols:
+        col_seed = rng.integers(0, 2**32 - 1)
+        result[col] = ldp_numeric(result[col], mechanism=numeric_mechanism, random_state=col_seed, **kwargs)
+    for col in categorical_cols:
+        col_seed = rng.integers(0, 2**32 - 1)
+        result[col] = randomised_response(result[col], truth_p=truth_p, random_state=col_seed)
+    return result
 
 
 # --------------------------------------------------------------------------------------
@@ -287,28 +353,30 @@ def run_pipeline(df: pd.DataFrame, random_state: int | None = 42) -> Dict[str, M
         'RR': df.copy(),
         'Anonymised': anonymise_dataset(df.copy())
     }
-    # Apply noise
+    # Apply noise to numeric columns
     numeric = df.select_dtypes(include=[np.number]).columns
-    datasets['Laplace'][numeric] = add_laplace_noise(
-        datasets['Laplace'][numeric], random_state=random_state
+    datasets['Laplace'] = apply_ldp(
+        datasets['Laplace'], numeric_cols=numeric, categorical_cols=[],
+        numeric_mechanism='laplace', random_state=random_state
     )
-    datasets['Gaussian'][numeric] = add_gaussian_noise(
-        datasets['Gaussian'][numeric], random_state=random_state
+    datasets['Gaussian'] = apply_ldp(
+        datasets['Gaussian'], numeric_cols=numeric, categorical_cols=[],
+        numeric_mechanism='gaussian', random_state=random_state
     )
-    datasets['Exponential'][numeric] = add_exponential_noise(
-        datasets['Exponential'][numeric], random_state=random_state
+    datasets['Exponential'] = apply_ldp(
+        datasets['Exponential'], numeric_cols=numeric, categorical_cols=[],
+        numeric_mechanism='exponential', random_state=random_state
     )
-    datasets['Geometric'][numeric] = add_geometric_noise(
-        datasets['Geometric'][numeric], random_state=random_state
+    datasets['Geometric'] = apply_ldp(
+        datasets['Geometric'], numeric_cols=numeric, categorical_cols=[],
+        numeric_mechanism='geometric', random_state=random_state
     )
-    # Randomised response for categorical columns
-    cat_cols = df.select_dtypes(include=['object']).columns
-    for col in cat_cols:
-        if col == 'smoker':
-            continue
-        datasets['RR'][col] = randomised_response(
-            datasets['RR'][col], random_state=random_state
-        )
+    # Randomised response for categorical columns (excluding target)
+    cat_cols = [c for c in df.select_dtypes(include=['object', 'category']).columns if c != 'smoker']
+    datasets['RR'] = apply_ldp(
+        datasets['RR'], numeric_cols=[], categorical_cols=cat_cols,
+        truth_p=0.7, random_state=random_state
+    )
     # Process each dataset
     for name, data in datasets.items():
         X, y, preproc = preprocess_data(data)
