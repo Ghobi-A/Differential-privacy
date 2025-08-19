@@ -2,6 +2,8 @@
 
 This repository demonstrates how to apply **differential privacy** techniques to a tabular health‑insurance dataset and measure the impact of privacy on downstream machine‑learning models.  It grew out of an academic project, but all institution‑specific content has been removed so that the work can be shared freely on GitHub.
 
+For a deeper theoretical background on differential privacy concepts, see the [report](report.md).
+
 ## Overview
 
 The included Jupyter notebook (`differential_privacy.ipynb`) walks through the following steps:
@@ -23,11 +25,13 @@ The notebook is fully executable and makes no assumptions about prior infrastruc
    cd your‑repo
    ```
 
-2. **Install the dependencies**.  A `requirements.txt` is provided for convenience:
+2. **Install the project** in editable mode so that its modules and CLI are available system‑wide:
 
    ```bash
-   python -m pip install -r requirements.txt
+   pip install -e .
    ```
+
+   This installs the package along with the required dependencies.
 
 3. **Add the dataset**.  The notebook expects a CSV file named `insurance.csv` in the repository root.  You can supply your own dataset or download a public insurance dataset such as the one from the Kaggle medical‑cost dataset.
 
@@ -42,6 +46,19 @@ Alternatively, you can execute the notebook from the command line using `nbconve
 ```bash
 jupyter nbconvert --to notebook --execute --inplace differential_privacy.ipynb
 ```
+
+## Command-line interface
+
+After installation, the pipeline can also be run as a script:
+
+```bash
+python dp_refactored.py --data insurance.csv --random-state 42
+```
+
+**Flags**
+
+* `--data` – path to the insurance CSV dataset (default: `insurance.csv`).
+* `--random-state` – random seed for reproducibility (default: `42`).
 
 ## Continuous integration
 

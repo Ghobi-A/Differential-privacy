@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "differential-privacy"
+version = "0.1.0"
+description = "Differential Privacy Machine-Learning Pipeline"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "imbalanced-learn",
+    "keras",
+    "tensorflow",
+    "fairlearn",
+]
+
+[tool.setuptools]
+py-modules = ["dp_refactored"]
