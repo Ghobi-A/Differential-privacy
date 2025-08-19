@@ -123,7 +123,8 @@ def preprocess_data(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray, ColumnTra
     categorical_cols = X.select_dtypes(include=['object', 'category']).columns
     preprocessor = ColumnTransformer([
         ('num', StandardScaler(), numeric_cols),
-        ('cat', OneHotEncoder(sparse_output=False), categorical_cols)
+        # Ignore unseen categories at transform time to keep feature space stable
+        ('cat', OneHotEncoder(sparse_output=False, handle_unknown='ignore'), categorical_cols)
     ])
     X_processed = preprocessor.fit_transform(X)
     return X_processed, y.to_numpy(), preprocessor
@@ -185,8 +186,8 @@ def evaluate_model(model, X_test: np.ndarray, y_test: np.ndarray, sensitive: Ite
         preds = (model.predict(X_test) >= 0.5).astype(int)
     accuracy = accuracy_score(y_test, preds)
     # Fairness: compute parity differences with respect to sensitive attribute indices
-    dpd = demographic_parity_difference(y_test, preds, sensitive)
-    eod = equalized_odds_difference(y_test, preds, sensitive)
+    dpd = demographic_parity_difference(y_test, preds, sensitive_features=sensitive)
+    eod = equalized_odds_difference(y_test, preds, sensitive_features=sensitive)
     return accuracy, dpd, eod
 
 
@@ -216,25 +217,23 @@ def run_pipeline(df: pd.DataFrame) -> Dict[str, ModelResult]:
     for name, data in datasets.items():
         X, y, preproc = preprocess_data(data)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
-        # Use sex column as sensitive feature for fairness evaluation
-        # Determine sensitive feature index after preprocessing
+        # Use sex column as sensitive feature for fairness evaluation.  Obtain the
+        # index dynamically from the feature names to remain robust to changes in
+        # the OneHotEncoder's layout.
         sensitive_col_index = None
-        # Preprocessor order: numeric_cols then categorical columns in alphabetical order
-        # Sensitive attribute 'sex' will be encoded by OneHotEncoder; we take the first dummy as indicator
-        # Build mask: number of numeric features + index of 'sex' dummy
-        num_num = len(preproc.transformers_[0][2])
-        cat_names = list(preproc.transformers_[1][1].get_feature_names_out(preproc.transformers_[1][2]))
-        sex_indices = [i for i, cname in enumerate(cat_names) if cname.startswith('sex_')]
+        feature_names = preproc.get_feature_names_out()
+        sex_indices = [i for i, name in enumerate(feature_names) if name.startswith('cat__sex_')]
         if sex_indices:
-            sensitive_col_index = num_num + sex_indices[0]
+            sensitive_col_index = sex_indices[0]
         # Train models
         models = {
             'SVM': train_svm(X_train, y_train),
             'DecisionTree': train_decision_tree(X_train, y_train),
             'NeuralNetwork': train_neural_network(X_train, y_train)
         }
+        sensitive_feature = X_test[:, sensitive_col_index] if sensitive_col_index is not None else np.zeros(len(y_test))
         for mname, model in models.items():
-            acc, dpd, eod = evaluate_model(model, X_test, y_test, X_test[:, sensitive_col_index])
+            acc, dpd, eod = evaluate_model(model, X_test, y_test, sensitive_feature)
             results[f'{name}_{mname}'] = ModelResult(name=f'{name}_{mname}', accuracy=acc, dpd=dpd, eod=eod)
     return results
 
