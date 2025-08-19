@@ -18,22 +18,108 @@ Dependencies are listed in requirements.txt.
 from __future__ import annotations
 
 import argparse
+import logging
 from dataclasses import dataclass
-from typing import Dict, Tuple, Iterable
+from typing import Dict, Iterable, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split, GridSearchCV
+from pandas.api.types import (
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_numeric_dtype,
+    is_object_dtype,
+)
+from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from imblearn.over_sampling import SMOTE
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from keras.models import Sequential
 from keras.layers import Dense
 from sklearn.metrics import accuracy_score
-from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
+from fairlearn.metrics import (
+    demographic_parity_difference,
+    equalized_odds_difference,
+)
 import tensorflow as tf
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def set_numpy_seed(seed: int | None = None) -> np.random.Generator:
+    """Return a NumPy Generator seeded for reproducibility."""
+    if seed is not None:
+        np.random.seed(seed)
+    return np.random.default_rng(seed)
+
+
+def infer_schema(df: pd.DataFrame) -> Tuple[list[str], list[str]]:
+    """Infer categorical and numeric columns using pandas type checks."""
+    cat_cols: list[str] = []
+    num_cols: list[str] = []
+    for col in df.columns:
+        series = df[col]
+        if is_numeric_dtype(series) and not is_bool_dtype(series):
+            num_cols.append(col)
+        elif is_categorical_dtype(series) or is_object_dtype(series) or is_bool_dtype(series):
+            cat_cols.append(col)
+    return cat_cols, num_cols
+
+
+def validate_columns(
+    df: pd.DataFrame,
+    cat_cols: list[str] | None = None,
+    num_cols: list[str] | None = None,
+    strict: bool = True,
+) -> Tuple[list[str], list[str]]:
+    """Validate columns for NaNs and identifier-like patterns.
+
+    Returns the categorical and numeric column lists used for validation.
+    """
+    if cat_cols is None or num_cols is None:
+        inferred_cat, inferred_num = infer_schema(df)
+        if cat_cols is None:
+            cat_cols = inferred_cat
+        if num_cols is None:
+            num_cols = inferred_num
+
+    issues = []
+    if df[cat_cols + num_cols].isnull().any().any():
+        issues.append("NaNs detected in data")
+
+    suspicious = []
+    for col in df.columns:
+        unique_ratio = df[col].nunique(dropna=True) / max(len(df), 1)
+        if unique_ratio > 0.95 or "id" in col.lower():
+            suspicious.append(col)
+    if suspicious:
+        issues.append(f"Potential identifier columns: {suspicious}")
+
+    if issues:
+        msg = "; ".join(issues)
+        if strict:
+            raise ValueError(msg)
+        logger.warning(msg)
+
+    return cat_cols, num_cols
+
+
+def read_csv_safe(path: str, strict: bool = True) -> pd.DataFrame:
+    """Read a CSV file with validation and logging."""
+    logger.info("Reading CSV from %s", path)
+    df = pd.read_csv(path)
+    validate_columns(df, strict=strict)
+    return df
+
+
+def write_csv_safe(df: pd.DataFrame, path: str) -> None:
+    """Write a DataFrame to CSV with logging."""
+    logger.info("Writing CSV to %s", path)
+    df.to_csv(path, index=False)
 
 # --------------------------------------------------------------------------------------
 # Noise mechanisms
@@ -57,7 +143,7 @@ def add_laplace_noise(
         Noised DataFrame.
     """
     delta = sensitivity / epsilon
-    rng = np.random.default_rng(random_state)
+    rng = set_numpy_seed(random_state)
     noise = rng.laplace(0, delta, data.shape)
     return data + noise
 
@@ -75,7 +161,7 @@ def add_gaussian_noise(
         random_state: Seed for the random number generator.
     """
     sigma = sensitivity * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
-    rng = np.random.default_rng(random_state)
+    rng = set_numpy_seed(random_state)
     noise = rng.normal(0, sigma, data.shape)
     return data + noise
 
@@ -90,7 +176,7 @@ def add_exponential_noise(
     Args:
         random_state: Seed for the random number generator.
     """
-    rng = np.random.default_rng(random_state)
+    rng = set_numpy_seed(random_state)
     noise = rng.exponential(scale, data.shape)
     return data + noise
 
@@ -106,7 +192,7 @@ def add_geometric_noise(
         random_state: Seed for the random number generator.
     """
     p = 1 - np.exp(-epsilon)
-    rng = np.random.default_rng(random_state)
+    rng = set_numpy_seed(random_state)
     noise = rng.geometric(p, size=data.shape) - 1
     return data + noise
 
@@ -125,7 +211,7 @@ def randomised_response(
         random_state: Seed for the random number generator.
     """
     values = series.unique()
-    rng = np.random.default_rng(random_state)
+    rng = set_numpy_seed(random_state)
     rand = rng.random(len(series))
     random_response = rng.choice(values, size=len(series))
     return pd.Series(np.where(rand < p, series, random_response), index=series.index)
@@ -277,6 +363,7 @@ def run_pipeline(df: pd.DataFrame, random_state: int | None = 42) -> Dict[str, M
     Args:
         random_state: Seed controlling randomness throughout the pipeline.
     """
+    set_numpy_seed(random_state)
     results = {}
     datasets: Dict[str, pd.DataFrame] = {
         'Original': df.copy(),
@@ -347,8 +434,7 @@ def main():
     parser.add_argument('--data', type=str, default='insurance.csv', help='Path to the insurance CSV dataset.')
     parser.add_argument('--random-state', type=int, default=42, help='Random seed for reproducibility.')
     args = parser.parse_args()
-    df = pd.read_csv(args.data)
-    df.dropna(inplace=True)
+    df = read_csv_safe(args.data, strict=True)
     res = run_pipeline(df, random_state=args.random_state)
     for key in sorted(res.keys()):
         r = res[key]
