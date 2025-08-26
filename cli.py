@@ -1,7 +1,8 @@
 """Simple command line interface for noise mechanisms.
 
-Reads a CSV file, applies a selected noise mechanism to numeric columns and
-writes the result to a new CSV file.
+Reads a CSV file, applies a selected noise mechanism to numeric columns or
+randomised response to categorical columns, and writes the result to a new
+CSV file.
 """
 
 import argparse
@@ -13,6 +14,7 @@ from mechanisms import (
     add_gaussian_noise,
     add_exponential_noise,
     add_geometric_noise,
+    randomised_response,
 )
 
 MECHANISMS = {
@@ -20,16 +22,25 @@ MECHANISMS = {
     'gaussian': add_gaussian_noise,
     'exponential': add_exponential_noise,
     'geometric': add_geometric_noise,
+    'randomised-response': randomised_response,
 }
 
 def main():
-    parser = argparse.ArgumentParser(description="Apply DP noise mechanism to CSV data")
+    parser = argparse.ArgumentParser(
+        description="Apply DP mechanism to CSV data, including randomised response for categorical values"
+    )
     parser.add_argument('--input', type=Path, required=True, help='Input CSV file')
     parser.add_argument('--output', type=Path, required=True, help='Output CSV file')
     parser.add_argument('--mechanism', choices=MECHANISMS.keys(), default='laplace')
     parser.add_argument('--random-state', type=int, default=None)
     parser.add_argument('--epsilon', type=float, default=0.1)
     parser.add_argument('--sensitivity', type=float, default=1.0)
+    parser.add_argument(
+        '--probability',
+        type=float,
+        default=0.7,
+        help='Truthful response probability for the randomised-response mechanism',
+    )
     # ``argparse`` raises an error if unexpected arguments are supplied.  The
     # tests for this repository mutate the command list in-place to change the
     # output path for a second invocation.  The mutation accidentally drops the
@@ -56,13 +67,21 @@ def main():
 
     df = pd.read_csv(args.input)
     numeric = df.select_dtypes(include=['number']).columns
+    categorical = df.select_dtypes(exclude=['number']).columns
     func = MECHANISMS[args.mechanism]
-    kwargs = {'random_state': args.random_state}
-    if args.mechanism in {'laplace', 'gaussian', 'exponential', 'geometric'}:
-        kwargs['epsilon'] = args.epsilon
-    if args.mechanism in {'laplace', 'gaussian', 'exponential'}:
-        kwargs['sensitivity'] = args.sensitivity
-    df.loc[:, numeric] = func(df[numeric], **kwargs)
+
+    if args.mechanism == 'randomised-response':
+        for col in categorical:
+            df[col] = func(
+                df[col], p=args.probability, random_state=args.random_state
+            )
+    else:
+        kwargs = {'random_state': args.random_state}
+        if args.mechanism in {'laplace', 'gaussian', 'exponential', 'geometric'}:
+            kwargs['epsilon'] = args.epsilon
+        if args.mechanism in {'laplace', 'gaussian', 'exponential'}:
+            kwargs['sensitivity'] = args.sensitivity
+        df.loc[:, numeric] = func(df[numeric], **kwargs)
     df.to_csv(args.output, index=False)
 
 if __name__ == '__main__':
