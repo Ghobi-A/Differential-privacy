@@ -9,7 +9,7 @@ For a deeper theoretical background on differential privacy concepts, see the [r
 The included Jupyter notebook (`differential_privacy.ipynb`) walks through the following steps:
 
 1. **Data loading and exploration** –  We start with a sample insurance dataset containing demographic and health‑related features (age, sex, BMI, number of children, smoker status, region and charges).  Basic exploratory analysis is performed on numeric features.
-2. **Noise injection** –  Laplace and Gaussian noise are added to the dataset at both random and fixed magnitudes to provide differential‑privacy guarantees.  The code demonstrates how to implement custom noise functions and apply them to sensitive attributes.
+2. **Noise injection** –  Laplace, Gaussian and Exponential noise are added to the dataset at both random and fixed magnitudes to provide differential‑privacy guarantees.  The noise functions accept a privacy budget ``epsilon`` (and optional ``sensitivity``), computing any required scale internally.
 3. **Anonymisation** –  We anonymise certain quasi‑identifiers by grouping continuous features into buckets (e.g. converting raw age into age groups) and binarising the number of children.  This improves privacy through *k‑anonymity*, *l‑diversity* and *t‑closeness* without destroying utility.
 4. **Machine‑learning models** –  Three classifiers are trained on the original and noised datasets: Support Vector Machines, a basic Neural Network and a Decision Tree.  The goal is to understand how privacy noise affects predictive performance.
 5. **Fairness metrics** –  For each trained model we compute demographic‑parity and equal‑opportunity metrics to see how the addition of noise impacts fairness across sensitive groups.
