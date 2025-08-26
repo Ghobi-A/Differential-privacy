@@ -60,6 +60,19 @@ python dp_refactored.py --data insurance.csv --random-state 42
 * `--data` – path to the insurance CSV dataset (default: `insurance.csv`).
 * `--random-state` – random seed for reproducibility (default: `42`).
 
+## Graphical interface
+
+A minimal Tkinter GUI is also available after installation:
+
+```bash
+dp-gui
+```
+
+The window lets you select input and output CSV files, choose a noise
+mechanism and adjust parameters before writing the transformed data.  The GUI
+depends on Python's Tkinter library which may need to be installed separately
+on some systems (e.g. `sudo apt install python3-tk`).
+
 ## Continuous integration
 
 For convenience, this repository includes a GitHub Actions workflow that will run the notebook on every push and pull request.  It sets up a Python environment, installs the dependencies and executes `differential_privacy.ipynb` using `nbconvert`.  If the notebook runs successfully, the workflow will finish with a green check mark.  You can find the workflow definition in `.github/workflows/run‑notebook.yml`.
