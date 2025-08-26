@@ -28,6 +28,8 @@ def main():
     parser.add_argument('--output', type=Path, required=True, help='Output CSV file')
     parser.add_argument('--mechanism', choices=MECHANISMS.keys(), default='laplace')
     parser.add_argument('--random-state', type=int, default=None)
+    parser.add_argument('--epsilon', type=float, default=0.1)
+    parser.add_argument('--sensitivity', type=float, default=1.0)
     # ``argparse`` raises an error if unexpected arguments are supplied.  The
     # tests for this repository mutate the command list in-place to change the
     # output path for a second invocation.  The mutation accidentally drops the
@@ -55,7 +57,12 @@ def main():
     df = pd.read_csv(args.input)
     numeric = df.select_dtypes(include=['number']).columns
     func = MECHANISMS[args.mechanism]
-    df.loc[:, numeric] = func(df[numeric], random_state=args.random_state)
+    kwargs = {'random_state': args.random_state}
+    if args.mechanism in {'laplace', 'gaussian', 'exponential', 'geometric'}:
+        kwargs['epsilon'] = args.epsilon
+    if args.mechanism in {'laplace', 'gaussian', 'exponential'}:
+        kwargs['sensitivity'] = args.sensitivity
+    df.loc[:, numeric] = func(df[numeric], **kwargs)
     df.to_csv(args.output, index=False)
 
 if __name__ == '__main__':

@@ -18,8 +18,24 @@ def add_gaussian_noise(data: pd.DataFrame, epsilon: float = 0.1, delta: float = 
     return data + noise
 
 
-def add_exponential_noise(data: pd.DataFrame, scale: float = 1.0, random_state: int | None = None) -> pd.DataFrame:
-    """Add exponential noise (Laplacian in L1 space)."""
+def add_exponential_noise(
+    data: pd.DataFrame,
+    epsilon: float = 0.1,
+    sensitivity: float = 1.0,
+    random_state: int | None = None,
+) -> pd.DataFrame:
+    """Add exponential noise (Laplacian in L1 space).
+
+    Args:
+        data: Data to perturb.
+        epsilon: Privacy budget controlling the noise.
+        sensitivity: Query sensitivity.
+        random_state: Seed for the random number generator.
+
+    Returns:
+        DataFrame with exponential noise added to numeric columns.
+    """
+    scale = sensitivity / epsilon
     rng = np.random.default_rng(random_state)
     noise = rng.exponential(scale, data.shape)
     return data + noise
