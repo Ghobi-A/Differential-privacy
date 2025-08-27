@@ -84,4 +84,5 @@ The original academic report (PDF) and any institution‑specific content are in
 
 ## License
 
-This project is made available for educational purposes.  Feel free to copy, modify and share as long as you respect the privacy of any data you use.
+This project is licensed under the [MIT License](LICENSE).
+
