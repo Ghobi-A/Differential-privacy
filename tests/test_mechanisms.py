@@ -33,6 +33,13 @@ def test_exponential_noise():
     _check_noise(add_exponential_noise)
 
 
+def test_exponential_noise_centered():
+    data = pd.DataFrame(np.zeros((10000, 1)))
+    noisy = add_exponential_noise(data, epsilon=1.0, random_state=0)
+    noise = (noisy - data).to_numpy().ravel()
+    assert abs(noise.mean()) < 0.05
+
+
 def test_geometric_noise():
     _check_noise(add_geometric_noise)
 
