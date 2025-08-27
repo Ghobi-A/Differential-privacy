@@ -88,8 +88,16 @@ def add_geometric_noise(
     """
     p = 1 - np.exp(-epsilon)
     rng = np.random.default_rng(random_state)
-    noise = rng.geometric(p, size=data.shape) - 1
-    return data + noise
+    # Generate signed geometric noise by subtracting two independent draws.
+    noise = rng.geometric(p, size=data.shape) - rng.geometric(p, size=data.shape)
+    noisy = data + noise
+
+    # Preserve integer dtypes by rounding and casting back to the original type.
+    int_cols = data.select_dtypes(include="integer").columns
+    for col in int_cols:
+        noisy[col] = noisy[col].round().astype(data[col].dtype)
+
+    return noisy
 
 
 def randomised_response(series: pd.Series, p: float = 0.7, random_state: int | None = None) -> pd.Series:

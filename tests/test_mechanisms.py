@@ -37,6 +37,15 @@ def test_geometric_noise():
     _check_noise(add_geometric_noise)
 
 
+def test_geometric_noise_centered():
+    data = pd.DataFrame(np.zeros((10000, 1), dtype=int))
+    noisy = add_geometric_noise(data, epsilon=1.0, random_state=0)
+    noise = (noisy - data).to_numpy().ravel()
+    assert abs(noise.mean()) < 0.05
+    # Integer dtypes should be preserved after adding noise
+    assert noisy.dtypes.equals(data.dtypes)
+
+
 def test_randomised_response():
     series = pd.Series(['a', 'b', 'c', 'a'])
     out1 = randomised_response(series, random_state=0)
