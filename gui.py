@@ -33,6 +33,7 @@ def main() -> None:
     epsilon_var = tk.StringVar()
     delta_var = tk.StringVar()
     sensitivity_var = tk.StringVar()
+    prob_var = tk.StringVar()
     seed_var = tk.StringVar()
 
     def browse_input() -> None:
@@ -63,6 +64,7 @@ def main() -> None:
             eps = float(epsilon_var.get()) if epsilon_var.get() else 0.1
             delt = float(delta_var.get()) if delta_var.get() else 1e-5
             sens = float(sensitivity_var.get()) if sensitivity_var.get() else 1.0
+            prob = float(prob_var.get()) if prob_var.get() else 0.7
             seed = int(seed_var.get()) if seed_var.get() else None
 
             if mech == "Laplace":
@@ -87,7 +89,9 @@ def main() -> None:
                 )
             elif mech == "Randomised Response":
                 for col in categorical.columns:
-                    df[col] = randomised_response(categorical[col], random_state=seed)
+                    df[col] = randomised_response(
+                        categorical[col], p=prob, random_state=seed
+                    )
 
             df.to_csv(out, index=False)
         except Exception as exc:  # pragma: no cover - GUI feedback
@@ -117,10 +121,13 @@ def main() -> None:
     tk.Label(root, text="Sensitivity:").grid(row=5, column=0, sticky="e")
     tk.Entry(root, textvariable=sensitivity_var).grid(row=5, column=1, sticky="w")
 
-    tk.Label(root, text="Random seed:").grid(row=6, column=0, sticky="e")
-    tk.Entry(root, textvariable=seed_var).grid(row=6, column=1, sticky="w")
+    tk.Label(root, text="Probability:").grid(row=6, column=0, sticky="e")
+    tk.Entry(root, textvariable=prob_var).grid(row=6, column=1, sticky="w")
 
-    tk.Button(root, text="Run", command=run).grid(row=7, column=1)
+    tk.Label(root, text="Random seed:").grid(row=7, column=0, sticky="e")
+    tk.Entry(root, textvariable=seed_var).grid(row=7, column=1, sticky="w")
+
+    tk.Button(root, text="Run", command=run).grid(row=8, column=1)
 
     root.mainloop()
 
