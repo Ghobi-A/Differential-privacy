@@ -69,7 +69,7 @@ def add_exponential_noise(
     """
     scale = sensitivity / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.exponential(scale, data.shape)
+    noise = rng.exponential(scale, data.shape) - scale
     return data + noise
 
 
