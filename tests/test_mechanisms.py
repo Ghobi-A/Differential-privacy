@@ -37,6 +37,12 @@ def test_geometric_noise():
     _check_noise(add_geometric_noise)
 
 
+def test_geometric_noise_integer_output():
+    data = pd.DataFrame(np.zeros((10, 5), dtype=int))
+    out = add_geometric_noise(data, random_state=0)
+    assert all(pd.api.types.is_integer_dtype(dtype) for dtype in out.dtypes)
+
+
 def test_randomised_response():
     series = pd.Series(['a', 'b', 'c', 'a'])
     out1 = randomised_response(series, random_state=0)

@@ -42,11 +42,19 @@ def add_exponential_noise(
 
 
 def add_geometric_noise(data: pd.DataFrame, epsilon: float = 0.1, random_state: int | None = None) -> pd.DataFrame:
-    """Add geometric noise for integer‑valued data."""
+    """Add geometric noise for integer‑valued data.
+
+    Noise is drawn from a geometric distribution and added to each column. If a
+    column has an integer dtype, the result is rounded and cast back to that
+    integer type after noise is added.
+    """
     p = 1 - np.exp(-epsilon)
     rng = np.random.default_rng(random_state)
     noise = rng.geometric(p, size=data.shape) - 1
-    return data + noise
+    noised = data + noise
+    for col in data.select_dtypes(include="integer").columns:
+        noised[col] = noised[col].round().astype(data[col].dtype)
+    return noised
 
 
 def randomised_response(series: pd.Series, p: float = 0.7, random_state: int | None = None) -> pd.Series:
