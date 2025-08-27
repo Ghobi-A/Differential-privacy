@@ -69,7 +69,8 @@ dp-gui
 ```
 
 The window lets you select input and output CSV files, choose a noise
-mechanism and adjust parameters before writing the transformed data.  The GUI
+mechanism and adjust parameters, including the probability used for the
+Randomised Response mechanism, before writing the transformed data.  The GUI
 depends on Python's Tkinter library which may need to be installed separately
 on some systems (e.g. `sudo apt install python3-tk`).
 
