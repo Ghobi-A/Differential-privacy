@@ -151,6 +151,12 @@ def apply_ldp(
 ) -> pd.DataFrame:
     """Apply local DP mechanisms to selected columns of ``df``.
 
+    Numeric columns are split into floating and integer types.  Integer columns are
+    detected with ``select_dtypes(include='integer')``.  When the numeric mechanism
+    is ``'geometric'`` it is applied directly to these integer columns; otherwise
+    the noised values are rounded and cast back to the original integer dtype.
+    Floating columns are perturbed as-is using the specified numeric mechanism.
+
     Args:
         df: DataFrame to perturb.
         numeric_cols: Columns to apply numeric mechanism to.  If ``None``,
@@ -167,14 +173,31 @@ def apply_ldp(
     """
     result = df.copy()
     rng = np.random.default_rng(random_state)
+
     if numeric_cols is None:
-        numeric_cols = result.select_dtypes(include=[np.number]).columns
+        float_cols = result.select_dtypes(include="floating").columns
+        int_cols = result.select_dtypes(include="integer").columns
+    else:
+        numeric_cols = list(numeric_cols)
+        float_cols = [c for c in numeric_cols if pd.api.types.is_float_dtype(result[c])]
+        int_cols = [c for c in numeric_cols if pd.api.types.is_integer_dtype(result[c])]
+
     if categorical_cols is None:
         categorical_cols = result.select_dtypes(include=["object", "category"]).columns
 
-    for col in numeric_cols:
+    for col in float_cols:
         col_seed = rng.integers(0, 2**32 - 1)
         result[col] = ldp_numeric(result[col], mechanism=numeric_mechanism, random_state=col_seed, **kwargs)
+
+    for col in int_cols:
+        col_seed = rng.integers(0, 2**32 - 1)
+        noised = ldp_numeric(result[col], mechanism=numeric_mechanism, random_state=col_seed, **kwargs)
+        if numeric_mechanism != "geometric":
+            noised = noised.round().astype(result[col].dtype)
+        else:
+            noised = noised.astype(result[col].dtype)
+        result[col] = noised
+
     for col in categorical_cols:
         col_seed = rng.integers(0, 2**32 - 1)
         result[col] = randomised_response(result[col], p=truth_p, random_state=col_seed)
