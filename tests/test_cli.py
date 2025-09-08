@@ -18,7 +18,7 @@ def test_cli_creates_deterministic_output(tmp_path):
     res1 = pd.read_csv(out1)
 
     out2 = tmp_path / 'out2.csv'
-    cmd[-2] = str(out2)  # replace output path
+    cmd[cmd.index(str(out1))] = str(out2)
     subprocess.run(cmd, check=True)
     res2 = pd.read_csv(out2)
 
@@ -49,7 +49,7 @@ def test_cli_randomised_response_deterministic(tmp_path):
     res1 = pd.read_csv(out1)
 
     out2 = tmp_path / 'out2.csv'
-    cmd[-2] = str(out2)
+    cmd[cmd.index(str(out1))] = str(out2)
     subprocess.run(cmd, check=True)
     res2 = pd.read_csv(out2)
 
