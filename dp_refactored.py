@@ -34,6 +34,7 @@ from keras.layers import Dense
 from sklearn.metrics import accuracy_score
 from fairlearn.metrics import demographic_parity_difference, equalized_odds_difference
 import tensorflow as tf
+from mechanisms import randomised_response
 
 # --------------------------------------------------------------------------------------
 # Local differential privacy mechanisms
@@ -138,24 +139,6 @@ def ldp_numeric(
     return mechanisms[mech](column, random_state=random_state, **kwargs)
 
 
-def randomised_response(
-    series: pd.Series,
-    truth_p: float = 0.7,
-    random_state: int | None = None,
-) -> pd.Series:
-    """Randomised response for categorical data.
-
-    Each value is reported truthfully with probability ``truth_p``; otherwise a
-    random category from the observed domain is returned.
-    """
-    rng = np.random.default_rng(random_state)
-    values = series.unique()
-    rand = rng.random(len(series))
-    random_response = rng.choice(values, size=len(series))
-    result = np.where(rand < truth_p, series.to_numpy(), random_response)
-    return pd.Series(result, index=series.index)
-
-
 def apply_ldp(
     df: pd.DataFrame,
     numeric_cols: Iterable[str] | None = None,
@@ -193,7 +176,7 @@ def apply_ldp(
         result[col] = ldp_numeric(result[col], mechanism=numeric_mechanism, random_state=col_seed, **kwargs)
     for col in categorical_cols:
         col_seed = rng.integers(0, 2**32 - 1)
-        result[col] = randomised_response(result[col], truth_p=truth_p, random_state=col_seed)
+        result[col] = randomised_response(result[col], p=truth_p, random_state=col_seed)
     return result
 
 
