@@ -21,8 +21,12 @@ def add_laplace_noise(
     """
     scale = sensitivity / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.laplace(0, scale, data.shape)
-    return data + noise
+    noisy = data.copy()
+    num_cols = data.select_dtypes(include="number").columns
+    if len(num_cols):
+        noise = rng.laplace(0, scale, size=(len(data), len(num_cols)))
+        noisy[num_cols] = data[num_cols] + noise
+    return noisy
 
 
 def add_gaussian_noise(
@@ -46,8 +50,12 @@ def add_gaussian_noise(
     """
     sigma = sensitivity * np.sqrt(2 * np.log(1.25 / delta)) / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.normal(0, sigma, data.shape)
-    return data + noise
+    noisy = data.copy()
+    num_cols = data.select_dtypes(include="number").columns
+    if len(num_cols):
+        noise = rng.normal(0, sigma, size=(len(data), len(num_cols)))
+        noisy[num_cols] = data[num_cols] + noise
+    return noisy
 
 
 def add_exponential_noise(
@@ -69,8 +77,12 @@ def add_exponential_noise(
     """
     scale = sensitivity / epsilon
     rng = np.random.default_rng(random_state)
-    noise = rng.exponential(scale, data.shape) - scale
-    return data + noise
+    noisy = data.copy()
+    num_cols = data.select_dtypes(include="number").columns
+    if len(num_cols):
+        noise = rng.exponential(scale, size=(len(data), len(num_cols))) - scale
+        noisy[num_cols] = data[num_cols] + noise
+    return noisy
 
 
 def add_geometric_noise(
@@ -88,9 +100,13 @@ def add_geometric_noise(
     """
     p = 1 - np.exp(-epsilon)
     rng = np.random.default_rng(random_state)
-    # Generate signed geometric noise by subtracting two independent draws.
-    noise = rng.geometric(p, size=data.shape) - rng.geometric(p, size=data.shape)
-    noisy = data + noise
+    noisy = data.copy()
+    num_cols = data.select_dtypes(include="number").columns
+    if len(num_cols):
+        noise = rng.geometric(p, size=(len(data), len(num_cols))) - rng.geometric(
+            p, size=(len(data), len(num_cols))
+        )
+        noisy[num_cols] = data[num_cols] + noise
 
     # Preserve integer dtypes by rounding and casting back to the original type.
     int_cols = data.select_dtypes(include="integer").columns

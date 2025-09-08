@@ -21,6 +21,19 @@ def _check_noise(func):
     assert not out1.equals(out3)
 
 
+def _check_noise_mixed(func, dtype=float, check_dtype=False):
+    data = pd.DataFrame({"num": np.zeros(10, dtype=dtype), "cat": ["x"] * 10})
+    out1 = func(data, random_state=0)
+    # Non-numeric columns should remain unchanged
+    pdt.assert_series_equal(out1["cat"], data["cat"])
+    out2 = func(data, random_state=0)
+    pdt.assert_frame_equal(out1, out2)
+    out3 = func(data, random_state=1)
+    assert not out1["num"].equals(out3["num"])
+    if check_dtype:
+        assert out1["num"].dtype == data["num"].dtype
+
+
 def test_laplace_noise():
     _check_noise(add_laplace_noise)
 
@@ -51,6 +64,22 @@ def test_geometric_noise_centered():
     assert abs(noise.mean()) < 0.05
     # Integer dtypes should be preserved after adding noise
     assert noisy.dtypes.equals(data.dtypes)
+
+
+def test_laplace_noise_mixed_types():
+    _check_noise_mixed(add_laplace_noise)
+
+
+def test_gaussian_noise_mixed_types():
+    _check_noise_mixed(add_gaussian_noise)
+
+
+def test_exponential_noise_mixed_types():
+    _check_noise_mixed(add_exponential_noise)
+
+
+def test_geometric_noise_mixed_types():
+    _check_noise_mixed(add_geometric_noise, dtype=int, check_dtype=True)
 
 
 def test_randomised_response():
