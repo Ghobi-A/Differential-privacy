@@ -90,3 +90,12 @@ def test_randomised_response():
     pdt.assert_series_equal(out1, out2)
     out3 = randomised_response(series, random_state=1)
     assert not out1.equals(out3)
+
+
+def test_randomised_response_nan_untouched():
+    series = pd.Series(["a", np.nan, "b", np.nan])
+    out = randomised_response(series, p=0.0, random_state=0)
+    # NaN positions should remain NaN
+    assert out.isna().tolist() == series.isna().tolist()
+    # Randomisation should only draw from non-NaN values
+    assert out.dropna().isin(["a", "b"]).all()

@@ -117,9 +117,19 @@ def add_geometric_noise(
 
 
 def randomised_response(series: pd.Series, p: float = 0.7, random_state: int | None = None) -> pd.Series:
-    """Apply randomised response to a categorical variable."""
-    values = series.unique()
+    """Apply randomised response to a categorical variable.
+
+    NaN values are left untouched and excluded from the random-choice pool.
+    """
     rng = np.random.default_rng(random_state)
-    rand = rng.random(len(series))
-    random_response = rng.choice(values, size=len(series))
-    return pd.Series(np.where(rand < p, series, random_response), index=series.index)
+
+    # Operate only on non-NaN entries so that NaNs remain untouched and
+    # are not part of the random response pool.
+    not_nan = series.notna()
+    values = series[not_nan].unique()
+    rand = rng.random(not_nan.sum())
+    random_response = rng.choice(values, size=not_nan.sum())
+
+    result = series.copy()
+    result[not_nan] = np.where(rand < p, series[not_nan], random_response)
+    return result
