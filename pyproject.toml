@@ -18,6 +18,15 @@ dependencies = [
     "fairlearn",
 ]
 
+[project.optional-dependencies]
+experimental = [
+    "torch",
+    "opacus",
+    "autodp",
+    "tabulate",
+    "ipython",
+]
+
 [project.scripts]
 dp-gui = "gui:main"
 
