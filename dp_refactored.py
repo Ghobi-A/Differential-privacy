@@ -27,6 +27,7 @@ from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from keras.models import Sequential
@@ -257,21 +258,23 @@ def train_svm(
     X: np.ndarray,
     y: np.ndarray,
     random_state: int | None = None,
-) -> SVC:
-    """Train an SVM classifier with reasonable defaults and basic hyper‑parameter search.
+) -> Pipeline:
+    """Train an SVM classifier using a pipeline that oversamples within each CV fold.
 
     Args:
         random_state: Seed for SMOTE and model initialisation.
     """
     param_grid = {
-        'C': [1, 5, 10],
-        'kernel': ['linear', 'rbf'],
-        'gamma': ['scale', 'auto']
+        'clf__C': [1, 5, 10],
+        'clf__kernel': ['linear', 'rbf'],
+        'clf__gamma': ['scale', 'auto']
     }
-    smote = SMOTE(random_state=random_state)
-    X_res, y_res = smote.fit_resample(X, y)
-    grid = GridSearchCV(SVC(random_state=random_state), param_grid, cv=3, scoring='accuracy', n_jobs=-1)
-    grid.fit(X_res, y_res)
+    pipeline = Pipeline([
+        ('smote', SMOTE(random_state=random_state)),
+        ('clf', SVC(random_state=random_state))
+    ])
+    grid = GridSearchCV(pipeline, param_grid, cv=3, scoring='accuracy', n_jobs=-1)
+    grid.fit(X, y)
     return grid.best_estimator_
 
 
