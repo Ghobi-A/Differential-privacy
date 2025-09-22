@@ -99,3 +99,16 @@ def test_randomised_response_nan_untouched():
     assert out.isna().tolist() == series.isna().tolist()
     # Randomisation should only draw from non-NaN values
     assert out.dropna().isin(["a", "b"]).all()
+
+
+def test_randomised_response_p_zero_changes_all_values():
+    series = pd.Series(["a", "b", "c", "a"])
+    out = randomised_response(series, p=0.0, random_state=42)
+    comparison = out[series.notna()] != series[series.notna()]
+    assert comparison.all()
+
+
+def test_randomised_response_single_category_fallback():
+    series = pd.Series(["only"] * 4)
+    out = randomised_response(series, p=0.0, random_state=0)
+    pdt.assert_series_equal(out, series)

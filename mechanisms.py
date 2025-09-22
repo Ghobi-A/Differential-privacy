@@ -126,10 +126,21 @@ def randomised_response(series: pd.Series, p: float = 0.7, random_state: int | N
     # Operate only on non-NaN entries so that NaNs remain untouched and
     # are not part of the random response pool.
     not_nan = series.notna()
-    values = series[not_nan].unique()
-    rand = rng.random(not_nan.sum())
-    random_response = rng.choice(values, size=not_nan.sum())
-
     result = series.copy()
-    result[not_nan] = np.where(rand < p, series[not_nan], random_response)
+    if not not_nan.any():
+        return result
+
+    non_nan_series = series[not_nan]
+    values = pd.unique(non_nan_series)
+    if len(values) <= 1:
+        return result
+
+    rand = rng.random(len(non_nan_series))
+    alternatives = {value: values[values != value] for value in values}
+    random_response = np.array(
+        [rng.choice(alternatives[value]) for value in non_nan_series.to_numpy()],
+        dtype=values.dtype,
+    )
+
+    result[not_nan] = np.where(rand < p, non_nan_series, random_response)
     return result
