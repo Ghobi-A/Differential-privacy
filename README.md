@@ -1,6 +1,6 @@
 # Differential Privacy in Machine Learning
 
-This repository demonstrates how to apply **differential privacy** techniques to a tabular health‑insurance dataset and measure the impact of privacy on downstream machine‑learning models.  It grew out of an academic project, but all institution‑specific content has been removed so that the work can be shared freely on GitHub.
+This repository demonstrates how to apply **differential privacy** techniques to a tabular health‑insurance dataset and measure the impact of privacy on downstream machine‑learning models.  It grew out of an academic project, but all institution specific content has been removed so that the work can be shared freely on GitHub.
 
 For a deeper theoretical background on differential privacy concepts, see the [report](report.md).
 
