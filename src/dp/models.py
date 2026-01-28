@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
-from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 
 from .constants import RANDOM_STATE
 
 
-def build_baseline_models() -> dict[str, object]:
-    """Return a dictionary of baseline sklearn models."""
+def build_svm_model() -> SVC:
+    """Build an RBF-kernel SVM with probability estimates enabled."""
+    return SVC(kernel="rbf", probability=True, random_state=RANDOM_STATE)
+
+
+def build_decision_tree_model() -> DecisionTreeClassifier:
+    """Build a decision tree classifier."""
+    return DecisionTreeClassifier(random_state=RANDOM_STATE)
+
+
+def build_model_registry() -> dict[str, object]:
+    """Return a dictionary of supported models for evaluation."""
     return {
-        "logistic_regression": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
-        "svm": SVC(kernel="rbf", probability=True, random_state=RANDOM_STATE),
-        "decision_tree": DecisionTreeClassifier(random_state=RANDOM_STATE),
+        "svm": build_svm_model(),
+        "decision_tree": build_decision_tree_model(),
     }
