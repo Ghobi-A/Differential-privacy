@@ -1,68 +1,46 @@
-# Refactored Differential Privacy Analysis
+# Findings Report
 
-## Overview
+## Dataset characteristics
+The insurance dataset contains **1,338 rows** and **7 columns**. Features are mixed-type: **3 categorical (object) columns**, **2 integer columns**, and **2 floating-point columns**. The target class **smoker** is imbalanced: **1,064 “no” (79.52%)** and **274 “yes” (20.48%)**. These proportions establish a substantial majority class that any evaluation must consider when interpreting ROC-AUC outcomes.
 
-This report documents improvements made to the original differential‑privacy
-notebook. The analysis retains the core objective—examining how adding
-privacy‑preserving noise affects machine‑learning models trained on a
-health‑insurance dataset—but introduces a modular pipeline, cleaner code and
-more rigorous evaluation.
+## Baseline performance
+Two baseline classifiers were trained with standard preprocessing (scaling numeric features and one-hot encoding categorical features). ROC-AUC on the test set is:
+- **SVM:** 0.994793
+- **Decision tree:** 0.917883
 
-The refactored code now lives under `src/dp/`, with orchestration in
-`src/dp/pipeline.py`. The package defines reusable functions for loading and
-preprocessing the data, applying DP noise mechanisms, training models and
-computing evaluation metrics.
+The SVM establishes a near-ceiling reference point for discrimination, while the decision tree provides a weaker but still strong baseline.
 
-## Dataset and Preprocessing
+## Failure of feature-level Laplace/Gaussian noise
+Feature-level perturbation was applied to clipped numeric features using Laplace (ε-DP) and Gaussian ((ε, δ)-DP) mechanisms across ε ∈ {0.01, 0.0398, 0.158, 0.631, 2.512, 10}. The observed ranges show a steep deterioration at low ε values:
 
-The dataset contains attributes like age, sex, BMI, number of children, smoker status, region and charges.  Missing values are dropped.  A helper function `preprocess_data` uses a `ColumnTransformer` to standardise numeric features and one‑hot encode categorical features.  The target (`smoker`) is binarised.
+- **Laplace (SVM):** ROC-AUC spans **0.4329 → 0.9780**.
+- **Laplace (Decision tree):** ROC-AUC spans **0.3842 → 0.8853**.
+- **Gaussian (SVM):** ROC-AUC spans **0.4732 → 0.8586**.
+- **Gaussian (Decision tree):** ROC-AUC spans **0.4774 → 0.8267**.
 
-An additional function `anonymise_dataset` groups continuous variables into coarse categories and binarises the `children` attribute.  This approach follows k‑anonymity principles: individuals are indistinguishable from at least *k* others with respect to quasi‑identifiers【12286000783039†L272-L314】.  By ensuring a minimum group size and grouping variables, the data also facilitates l‑diversity and t‑closeness: it encourages variety in sensitive attributes within each group【12286000783039†L325-L384】【12286000783039†L390-L401】.
+At the most stringent privacy levels (e.g., ε = 0.01), Laplace perturbation yields ROC-AUC around **0.43–0.46**, which is effectively at or below chance. This constitutes a practical failure for feature-level noise at low ε: the injected noise overwhelms the clipped numeric signal and erodes discriminative structure. The same degradation pattern appears for Gaussian noise, with minimum ROC-AUC near **0.47**, again close to random performance. These results demonstrate that feature-level DP at tight ε values is not viable for maintaining baseline utility in this setting.
 
-## Differential‑Privacy Noise Mechanisms
+## Why Bernoulli / exponential / geometric noise were excluded
+The notebook’s experimental scope explicitly restricts feature-level perturbation to **Laplace and Gaussian mechanisms** and compares them to **DP-SGD training-time privacy**. No outputs are reported for alternative distributions such as Bernoulli, exponential, or geometric noise. Accordingly, these mechanisms were excluded to keep the experiments limited to (i) continuous feature perturbations with standard DP mechanisms and (ii) training-time privacy via DP-SGD, all evaluated uniformly through ROC-AUC.
 
-The module defines functions for adding feature‑level noise:
+## DP-SGD results and interpretation
+DP-SGD was run with Opacus using noise multipliers {0.5, 1.0, 1.5, 2.0}. The privacy accountant reports ε values and ROC-AUC as follows:
 
-- **Laplace noise**: drawn from a Laplacian distribution scaled by sensitivity/ε, suitable for ε‑differential privacy.
-- **Gaussian noise**: implements the analytic Gaussian mechanism, adding noise proportional to \(\sqrt{\log (1.25/\delta)}\) per ε【12286000783039†L272-L314】.
-Each noise function operates only on numeric columns and returns a new DataFrame,
-leaving the original unchanged.
+| Noise multiplier | ε (δ = 1e-5) | ROC-AUC |
+| --- | --- | --- |
+| 0.5 | 32.0865 | 0.993171 |
+| 1.0 | 6.3774 | 0.992659 |
+| 1.5 | 3.1909 | 0.992574 |
+| 2.0 | 2.1290 | 0.994025 |
 
-## Modelling and Evaluation
+Across a wide ε range (≈2.13–32.09), **ROC-AUC remains effectively constant around 0.993–0.994**. This indicates that, within the tested configuration, DP-SGD delivers strong privacy guarantees with minimal degradation relative to the SVM baseline. The results also show the expected privacy-utility trade-off in terms of ε: larger noise multipliers yield smaller ε, while utility remains stable in this dataset and architecture.
 
-The pipeline creates several variants of the dataset: original, Laplace‑noised,
-Gaussian‑noised, and DP‑SGD‑trained models. For each variant it:
+## Fairness discussion
+Fairness metrics were computed on the baseline SVM using **sex** as the protected attribute and a threshold that maximizes Youden’s J statistic. The results are:
+- **Demographic parity (DP) difference:** 0.133690
+- **Equalized odds (EO) difference:** 0.023996
 
-1. **Preprocesses** the features and target.
-2. **Splits** the data into stratified training and test sets.
-3. **Trains baseline models**:
-   - Support Vector Machine with a small hyper‑parameter grid search.
-   - Shallow Decision Tree.
-   - Simple feed‑forward Neural Network with two hidden layers.
-5. **Evaluates** the models using accuracy and two fairness metrics:
-   - *Demographic parity difference*: measures the difference in positive prediction rates between sensitive groups【163128011541164†L115-L123】.
-   - *Equalised odds difference*: measures disparities in true‑positive and false‑positive rates.  
-   Sensitive features are derived from one of the one‑hot encoded `sex` dummies.
+A DP difference of **0.1337** indicates a 13.37 percentage-point gap in positive prediction rates between groups. The EO difference of **0.0240** indicates a smaller gap in error-rate parity (bounded by differences in TPR and FPR). These values show that, even with strong baseline discrimination, group-level disparities persist and should be considered when selecting operating thresholds or evaluating downstream policy impacts.
 
-Results are collected into a dictionary keyed by dataset and model name. The
-pipeline module exposes utilities to run experiments from the notebook and
-reproduce metrics consistently.
-
-## Improvements over the Original Notebook
-
-1. **Modularity and Reuse** – Functions encapsulate each task (noise addition, anonymisation, preprocessing, training and evaluation).  This reduces duplication and clarifies data flow.
-2. **Reusable Pipeline** – The dataset loading and preprocessing are packaged
-   in `src/dp/pipeline.py`, keeping data leakage in check by fitting transforms
-   on the training split only.
-3. **Fairness Evaluation** – Fairness metrics are systematically computed for every model/dataset combination, not just one model.  Demographic‑parity and equalised‑odds differences capture independence and separation notions of fairness【163128011541164†L115-L123】.
-4. **Anonymisation Rationale** – The anonymisation function generalises quasi‑identifiers and enforces minimum group sizes to meet k‑anonymity and encourages diversity and closeness in the sensitive attribute【12286000783039†L272-L314】【12286000783039†L325-L384】【12286000783039†L390-L401】.
-5. **Simplicity** – Explanatory comments and docstrings have been added to clarify the purpose of each function.  Unused code and duplicate imports have been removed.
-
-## Usage in GitHub
-
-Add this report to the repository and run the notebook or pipeline modules
-directly. The refactored code is better suited for reuse and integration.
-
-## Conclusion
-
-The refactored pipeline preserves the experimental goals of the original project—studying the effects of differential‑privacy mechanisms on machine‑learning models—while improving code organisation and evaluation depth.  Fairness metrics are computed consistently, and the anonymisation approach is grounded in established privacy definitions.  This structure will make it easier to extend the work, integrate into continuous‑integration workflows and share with collaborators.
+## Final conclusion
+The dataset is moderately imbalanced and supports high baseline discrimination, particularly for SVM. Feature-level Laplace and Gaussian perturbation collapses utility at low ε, with ROC-AUC near chance, making tight ε feature-noise impractical in this setting. In contrast, DP-SGD achieves **ε as low as ≈2.13** while preserving **ROC-AUC ≈0.993–0.994**, indicating a substantially better privacy–utility trade-off for this task. Fairness metrics reveal non-trivial demographic parity gaps despite strong predictive performance, underscoring the need to evaluate privacy, utility, and fairness jointly rather than in isolation.
