@@ -1,10 +1,6 @@
 import pandas as pd
 
-from privacy_checks import (
-    check_k_anonymity,
-    check_l_diversity,
-    check_t_closeness,
-)
+from dp.evaluation import check_k_anonymity, check_l_diversity, check_t_closeness
 
 
 def test_k_anonymity():

@@ -27,8 +27,8 @@ experimental = [
     "ipython",
 ]
 
-[project.scripts]
-dp-gui = "gui:main"
-
 [tool.setuptools]
-py-modules = ["dp_refactored", "cli", "mechanisms", "privacy_checks", "gui"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
