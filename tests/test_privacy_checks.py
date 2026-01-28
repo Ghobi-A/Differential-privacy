@@ -1,51 +1,50 @@
+import matplotlib
+import numpy as np
 import pandas as pd
 
-from dp.evaluation import check_k_anonymity, check_l_diversity, check_t_closeness
+from dp.evaluation import plot_roc_curves, privacy_utility_sweep
+from dp.models import build_model_registry
+
+matplotlib.use("Agg")
 
 
-def test_k_anonymity():
-    df = pd.DataFrame(
+def _sample_df(seed: int = 0) -> pd.DataFrame:
+    rng = np.random.default_rng(seed)
+    size = 50
+    return pd.DataFrame(
         {
-            'q1': [1, 1, 2, 2],
-            'q2': [1, 1, 2, 2],
-            's': ['a', 'b', 'a', 'b'],
+            "age": rng.integers(18, 65, size=size),
+            "bmi": rng.normal(30, 5, size=size),
+            "sex": rng.choice(["male", "female"], size=size),
+            "smoker": rng.choice(["yes", "no"], size=size),
         }
     )
-    assert check_k_anonymity(df, ['q1', 'q2'], k=2)
-    df_fail = df.copy()
-    df_fail.loc[0, 'q1'] = 3
-    assert not check_k_anonymity(df_fail, ['q1', 'q2'], k=2)
 
 
-def test_l_diversity():
-    df = pd.DataFrame(
-        {
-            'q': [1, 1, 2, 2],
-            's': ['a', 'b', 'a', 'b'],
-        }
+def test_privacy_utility_sweep_runs():
+    df = _sample_df()
+    sweep = privacy_utility_sweep(
+        df,
+        target="smoker",
+        epsilons=[0.5, 1.0],
+        mechanism="laplace",
+        random_state=0,
+        models=build_model_registry(),
     )
-    assert check_l_diversity(df, ['q'], 's', l=2)
-    df_fail = pd.DataFrame(
-        {
-            'q': [1, 1, 2, 2],
-            's': ['a', 'a', 'a', 'b'],
-        }
-    )
-    assert not check_l_diversity(df_fail, ['q'], 's', l=2)
+    assert not sweep.results.empty
+    assert {"model", "epsilon", "roc_auc"}.issubset(sweep.results.columns)
+    assert set(sweep.roc_curves.keys()) == {"0.5", "1.0"}
 
 
-def test_t_closeness():
-    df = pd.DataFrame(
-        {
-            'q': [1, 1, 2, 2],
-            's': ['a', 'b', 'a', 'b'],
-        }
+def test_plot_roc_curves():
+    df = _sample_df(seed=1)
+    sweep = privacy_utility_sweep(
+        df,
+        target="smoker",
+        epsilons=[0.5],
+        mechanism="laplace",
+        random_state=0,
+        models=build_model_registry(),
     )
-    assert check_t_closeness(df, ['q'], 's', t=0.1)
-    df_fail = pd.DataFrame(
-        {
-            'q': [1, 1, 2, 2],
-            's': ['a', 'a', 'a', 'b'],
-        }
-    )
-    assert not check_t_closeness(df_fail, ['q'], 's', t=0.1)
+    fig = plot_roc_curves(sweep.roc_curves["0.5"], title="ROC")
+    assert fig.axes

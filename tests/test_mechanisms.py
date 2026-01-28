@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 import pandas.testing as pdt
 
-from dp.mechanisms import add_gaussian_noise, add_laplace_noise
+from dp.mechanisms import (
+    add_gaussian_noise,
+    add_laplace_noise,
+    apply_randomized_response,
+    randomized_response,
+)
 
 
 def _check_noise(func):
@@ -42,3 +47,18 @@ def test_laplace_noise_mixed_types():
 
 def test_gaussian_noise_mixed_types():
     _check_noise_mixed(add_gaussian_noise)
+
+
+def test_randomized_response_binary():
+    series = pd.Series(["yes", "no", "yes", "no"])
+    out1 = randomized_response(series, epsilon=1.0, random_state=0)
+    out2 = randomized_response(series, epsilon=1.0, random_state=0)
+    assert set(out1.unique()) <= {"yes", "no"}
+    pdt.assert_series_equal(out1, out2)
+
+
+def test_apply_randomized_response_columns():
+    df = pd.DataFrame({"flag": ["yes", "no", "yes"], "keep": [1, 2, 3]})
+    out = apply_randomized_response(df, ["flag"], epsilon=0.5, random_state=0)
+    assert set(out["flag"].unique()) <= {"yes", "no"}
+    pdt.assert_series_equal(out["keep"], df["keep"])
