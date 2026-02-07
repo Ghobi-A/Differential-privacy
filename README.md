@@ -66,6 +66,12 @@ anonymisation steps in this repo (e.g., k-anonymity, l-diversity, t-closeness)
 are heuristic, non-DP baselines and should not be treated as formal
 privacy guarantees.
 
+Notes on exponential mechanisms: this repository does not currently implement
+the differential-privacy exponential mechanism (selection with a utility
+function), and any future exponential component should be treated as
+experimental until a formal DP proof is provided. Reviews and contributions
+are welcome.
+
 ## Pipeline entry point
 
 Reusable pipeline components live in `src/dp/pipeline.py`. These functions load
