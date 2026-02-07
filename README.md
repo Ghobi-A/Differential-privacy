@@ -55,6 +55,17 @@ Alternatively, you can execute the notebook from the command line using `nbconve
 jupyter nbconvert --to notebook --execute --inplace notebooks/dp_privacy_insurance.ipynb
 ```
 
+## Privacy Model and Guarantees
+
+This project uses additive Laplace and Gaussian noise as standard
+differential-privacy mechanisms. The threat model assumes an attacker with
+auxiliary information who attempts re-identification or attribute inference
+from released data or model outputs. Under the stated sensitivity and epsilon
+choices, the Laplace/Gaussian mechanisms provide formal DP guarantees. Other
+anonymisation steps in this repo (e.g., k-anonymity, l-diversity, t-closeness)
+are heuristic, non-DP baselines and should not be treated as formal
+privacy guarantees.
+
 ## Pipeline entry point
 
 Reusable pipeline components live in `src/dp/pipeline.py`. These functions load
