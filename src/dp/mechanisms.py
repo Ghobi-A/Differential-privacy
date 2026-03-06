@@ -115,3 +115,67 @@ def apply_randomized_response(
         seed = None if random_state is None else int(rng.integers(0, 1_000_000))
         noisy[column] = randomized_response(noisy[column], epsilon=epsilon, random_state=seed)
     return noisy
+
+
+def exponential_mechanism(
+    candidates: list,
+    utility_scores: np.ndarray,
+    epsilon: float,
+    sensitivity: float = 1.0,
+    random_state: int | None = None,
+):
+    """Select a candidate using the exponential mechanism (ε-DP).
+
+    The exponential mechanism samples from *candidates* with probability
+    proportional to ``exp(epsilon * score / (2 * sensitivity))``, providing
+    ε-differential privacy when *sensitivity* is the global L1 sensitivity of
+    the utility function.
+
+    Args:
+        candidates: Ordered collection of outputs to select from.
+        utility_scores: Array of real-valued utility scores, one per candidate.
+            Higher scores indicate more preferred outputs.
+        epsilon: Privacy budget.  Larger values favour high-utility candidates
+            more strongly at the cost of weaker privacy.
+        sensitivity: Global sensitivity of the utility function — the maximum
+            change in any single candidate's score when one record in the
+            database changes.  Defaults to 1.0.
+        random_state: Seed for the random number generator.
+
+    Returns:
+        The selected element from *candidates*.
+
+    Raises:
+        ValueError: If *epsilon* or *sensitivity* are not positive, or if
+            *candidates* and *utility_scores* have different lengths.
+
+    Examples:
+        >>> import numpy as np
+        >>> from dp.mechanisms import exponential_mechanism
+        >>> candidates = ["low", "medium", "high"]
+        >>> scores = np.array([1.0, 5.0, 3.0])
+        >>> exponential_mechanism(candidates, scores, epsilon=1.0, random_state=0)
+        'medium'
+    """
+    if epsilon <= 0:
+        raise ValueError("epsilon must be positive")
+    if sensitivity <= 0:
+        raise ValueError("sensitivity must be positive")
+    scores = np.asarray(utility_scores, dtype=float)
+    if len(candidates) != len(scores):
+        raise ValueError(
+            f"candidates and utility_scores must have the same length "
+            f"(got {len(candidates)} and {len(scores)})"
+        )
+    if len(candidates) == 0:
+        raise ValueError("candidates must not be empty")
+
+    # Numerically stable: subtract max before exponentiation.
+    log_weights = epsilon * scores / (2.0 * sensitivity)
+    log_weights -= log_weights.max()
+    weights = np.exp(log_weights)
+    probabilities = weights / weights.sum()
+
+    rng = get_rng(random_state)
+    index = rng.choice(len(candidates), p=probabilities)
+    return candidates[index]

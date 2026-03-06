@@ -6,6 +6,7 @@ from dp.mechanisms import (
     add_gaussian_noise,
     add_laplace_noise,
     apply_randomized_response,
+    exponential_mechanism,
     randomized_response,
 )
 
@@ -62,3 +63,60 @@ def test_apply_randomized_response_columns():
     out = apply_randomized_response(df, ["flag"], epsilon=0.5, random_state=0)
     assert set(out["flag"].unique()) <= {"yes", "no"}
     pdt.assert_series_equal(out["keep"], df["keep"])
+
+
+def test_exponential_mechanism_returns_candidate():
+    candidates = ["a", "b", "c"]
+    scores = np.array([1.0, 3.0, 2.0])
+    result = exponential_mechanism(candidates, scores, epsilon=1.0, random_state=0)
+    assert result in candidates
+
+
+def test_exponential_mechanism_reproducible():
+    candidates = ["x", "y", "z"]
+    scores = np.array([0.5, 2.0, 1.0])
+    r1 = exponential_mechanism(candidates, scores, epsilon=2.0, random_state=42)
+    r2 = exponential_mechanism(candidates, scores, epsilon=2.0, random_state=42)
+    assert r1 == r2
+
+
+def test_exponential_mechanism_prefers_high_utility():
+    # With large epsilon, the highest-scoring candidate should dominate.
+    candidates = ["low", "high"]
+    scores = np.array([0.0, 100.0])
+    selections = [
+        exponential_mechanism(candidates, scores, epsilon=10.0, random_state=i)
+        for i in range(50)
+    ]
+    assert selections.count("high") > selections.count("low")
+
+
+def test_exponential_mechanism_uniform_at_equal_scores():
+    # Equal scores → each candidate equally likely.
+    candidates = list(range(4))
+    scores = np.ones(4)
+    counts = {c: 0 for c in candidates}
+    for i in range(400):
+        result = exponential_mechanism(candidates, scores, epsilon=1.0, random_state=i)
+        counts[result] += 1
+    # Each bucket should receive roughly 100 ± a generous margin.
+    for c in candidates:
+        assert 50 < counts[c] < 200, f"Candidate {c} count {counts[c]} looks skewed"
+
+
+def test_exponential_mechanism_invalid_epsilon():
+    import pytest
+    with pytest.raises(ValueError, match="epsilon"):
+        exponential_mechanism(["a"], np.array([1.0]), epsilon=0.0)
+
+
+def test_exponential_mechanism_invalid_sensitivity():
+    import pytest
+    with pytest.raises(ValueError, match="sensitivity"):
+        exponential_mechanism(["a"], np.array([1.0]), epsilon=1.0, sensitivity=-1.0)
+
+
+def test_exponential_mechanism_length_mismatch():
+    import pytest
+    with pytest.raises(ValueError, match="same length"):
+        exponential_mechanism(["a", "b"], np.array([1.0]), epsilon=1.0)
