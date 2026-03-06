@@ -6,6 +6,7 @@ from .mechanisms import (
     add_gaussian_noise,
     add_laplace_noise,
     apply_randomized_response,
+    exponential_mechanism,
     randomized_response,
 )
 from .models import build_decision_tree_model, build_model_registry, build_svm_model
@@ -16,6 +17,7 @@ __all__ = [
     "add_gaussian_noise",
     "add_laplace_noise",
     "apply_randomized_response",
+    "exponential_mechanism",
     "build_decision_tree_model",
     "build_model_registry",
     "build_svm_model",

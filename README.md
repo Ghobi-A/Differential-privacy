@@ -66,11 +66,12 @@ anonymisation steps in this repo (e.g., k-anonymity, l-diversity, t-closeness)
 are heuristic, non-DP baselines and should not be treated as formal
 privacy guarantees.
 
-Notes on exponential mechanisms: this repository does not currently implement
-the differential-privacy exponential mechanism (selection with a utility
-function), and any future exponential component should be treated as
-experimental until a formal DP proof is provided. Reviews and contributions
-are welcome.
+The exponential mechanism (`exponential_mechanism` in `src/dp/mechanisms.py`)
+is now implemented.  It selects from a discrete set of candidates with
+probability proportional to `exp(ε · score / (2 · sensitivity))`, providing
+ε-differential privacy with respect to the global L1 sensitivity of the
+utility function.  The implementation uses numerically stable log-space
+computation and is fully covered by the test suite.
 
 ## Pipeline entry point
 
